@@ -1,8 +1,8 @@
-# UUPdump2ISO
+# uup-dump-builder
 
 ## Usage
 
-Use UUP DUMP to automatically build the latest version of Windows 10/11.
+Use uupdump to automatically build the latest version of Windows 10/11.
 
 ## Tools
 

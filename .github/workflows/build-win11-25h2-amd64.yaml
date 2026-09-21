@@ -1,4 +1,4 @@
-name: WIN11_25H2_amd64
+name: build-win11-25h2-amd64
 on: workflow_dispatch
 permissions:
   contents: write
@@ -7,7 +7,7 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 jobs:
-  WIN11_25H2_amd64:
+  build-win11-25h2-amd64:
     runs-on: windows-latest
     timeout-minutes: 300
     steps:
@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v7
         
       - name: Step-1 Build ISO from UUP dump package
-        working-directory: ./WIN11_25H2_amd64
+        working-directory: ./win11-25h2-amd64
         shell: cmd
         run: |
           uup_download_windows.cmd
@@ -24,9 +24,9 @@ jobs:
         working-directory: .
         shell: pwsh
         run: |
-          $SourceDir = "WIN11_25H2_amd64"
+          $SourceDir = "win11-25h2-amd64"
           $DistDir = "dist_win11"
-          $RevisionName = "WIN11_25H2_amd64"
+          $RevisionName = "win11-25h2-amd64"
           New-Item -Path $DistDir -ItemType Directory -Force | Out-Null
           $IsoFile = Get-ChildItem -Path $SourceDir -Filter "*.iso" -File | Select-Object -First 1
           $FullHash = (Get-FileHash -Path $IsoFile.FullName -Algorithm SHA256).Hash.ToLower()
@@ -92,7 +92,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
-        run: gh release delete ${{env.REVISION_NAME}} --cleanup-tag -y || true
+        run: gh release delete ${{ env.REVISION_NAME }} --cleanup-tag -y || true
         
       - name: Step-4 Delete past completed runs of this workflow
         if: ${{ always() }}
@@ -118,7 +118,7 @@ jobs:
           body: |
             ## Windows11_25H2_amd64-${{ env.ISO_REVISION }}
             - **ARTIFACT**: ${{ env.ISO_NAME }}
-            - **Version**: ${{ env.ISO_REVISION }}_Pro , virtual_editions: Education,Enterprise
+            - **Version**: ${{ env.ISO_REVISION }}_Pro
             - **SHA256**: ${{ env.SHA256 }}
             - **Language**: ZH_CN
             - **File Size**: ${{ env.ISO_SIZEMB }} 、 ${{ env.ISO_SIZEGB }}
