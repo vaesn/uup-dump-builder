@@ -116,7 +116,7 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           body: |
-            ## Windows11_25H2_amd64-${{ env.ISO_REVISION }}
+            ## Windows11 25H2 amd64 ${{ env.ISO_REVISION }}
             - **ARTIFACT**: ${{ env.ISO_NAME }}
             - **Version**: ${{ env.ISO_REVISION }}_Pro
             - **SHA256**: ${{ env.SHA256 }}
