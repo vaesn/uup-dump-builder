@@ -16,74 +16,102 @@ jobs:
 
       - name: Step-1 Build ISO from UUP dump package
         working-directory: ./win10-22h2-amd64
-        shell: cmd
+        shell: pwsh
         run: |
-          uup_download_windows.cmd
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $OutputEncoding = [System.Text.Encoding]::UTF8
+          & cmd /c .\uup_download_windows.cmd 2>&1 | Tee-Object -FilePath "./build-win10-22h2-amd64.log" -Encoding utf8
 
       - name: Step-2 Split Archive
         working-directory: .
         shell: pwsh
         run: |
-          $SourceDir = "win10-22h2-amd64"
-          $DistDir = "dist_win10"
+          $SourceDir    = "win10-22h2-amd64"
+          $DistDir      = "dist_win10"
           $RevisionName = "win10-22h2-amd64"
+          $MaxVolMB     = 1792
+          $Reserve      = 16
+          $MaxDiffMB    = 128
+
           New-Item -Path $DistDir -ItemType Directory -Force | Out-Null
-          $IsoFile = Get-ChildItem -Path $SourceDir -Filter "*.iso" -File | Select-Object -First 1
-          $FullHash = (Get-FileHash -Path $IsoFile.FullName -Algorithm SHA256).Hash.ToLower()
+          $Iso = Get-ChildItem -Path $SourceDir -Filter "*.iso" -File | Select-Object -First 1
+
+          $BaseName  = $Iso.BaseName
+          $IsoLength = $Iso.Length
+          $IsoDir    = $Iso.DirectoryName
+          $IsoFull   = $Iso.FullName
+
+          $FullHash = (Get-FileHash -Path $IsoFull -Algorithm SHA256).Hash.ToLower()
           $ShortHash = $FullHash.Substring($FullHash.Length - 8)
-          $NewFileName = "$($IsoFile.BaseName)_$ShortHash.iso"
-          $NewFilePath = Join-Path -Path $IsoFile.DirectoryName -ChildPath $NewFileName
-          Rename-Item -Path $IsoFile.FullName -NewName $NewFileName -Force
-          $Revision = $IsoFile.BaseName.Split('-')[0]
-          $SizeInBytes = $IsoFile.Length
-          $SizeInMB = $SizeInBytes / 1MB
-          $SizeInGB = $SizeInBytes / 1GB
-          $VolumeSizeVal = [int][Math]::Ceiling($SizeInMB / 5) + 16
-          $VolumeSizeArg = "${VolumeSizeVal}M"
+          $NewFileName = "${BaseName}_${ShortHash}.iso"
+          $NewFilePath = Join-Path -Path $IsoDir -ChildPath $NewFileName
+          Rename-Item -Path $IsoFull -NewName $NewFileName -Force
+
+          $Revision    = $BaseName.Split('-')[0]
+          $SizeInBytes = $IsoLength
+          $SizeInMB    = $SizeInBytes / 1MB
+          $SizeInGB    = $SizeInBytes / 1GB
+
+          $TotalMB = [Math]::Ceiling($SizeInMB)
+          $N       = [Math]::Ceiling($TotalMB / ($MaxVolMB - $Reserve))
+          $S       = [Math]::Ceiling($TotalMB / $N) + $Reserve
+          $Last    = $TotalMB - $S * ($N - 1)
+          $Diff    = $S - $Last
+
+          $VolumeSizeArg = "${S}M"
+
           $EnvVars = @(
-              "ISO_SIZEMB={0:N2} MB" -f $SizeInMB
-              "ISO_SIZEGB={0:N2} GB" -f $SizeInGB
-              "VOLUME_SIZE=$VolumeSizeArg"
-              "ISO_NAME=$NewFileName"
-              "ISO_PATH=$NewFilePath"
-              "ISO_REVISION=$Revision"
-              "REVISION_NAME=$RevisionName"
-              "SHA256=$FullHash"
+            "ISO_SIZEMB={0:N2} MB" -f $SizeInMB
+            "ISO_SIZEGB={0:N2} GB" -f $SizeInGB
+            "VOLUME_SIZE=$VolumeSizeArg"
+            "VOLUME_COUNT=$N"
+            "VOLUME_LAST=${Last}M"
+            "VOLUME_DIFF=$Diff"
+            "ISO_NAME=$NewFileName"
+            "ISO_PATH=$NewFilePath"
+            "ISO_REVISION=$Revision"
+            "REVISION_NAME=$RevisionName"
+            "SHA256=$FullHash"
           )
           $EnvVars | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
           Write-Host "========================================" -ForegroundColor Cyan
           Write-Host "  ISO Processing Information" -ForegroundColor Cyan
           Write-Host "========================================" -ForegroundColor Cyan
           @(
-              "文件名: $NewFileName"
-              "大小 : {0:N2} MB" -f $SizeInMB
-              "大小 : {0:N2} GB" -f $SizeInGB
-              "路径 : $NewFilePath"
-              "版本 : $Revision"
-              "SHA256: $FullHash"
-              "分卷参数: -v$VolumeSizeArg"
+            "文件名: $NewFileName"
+            "大小 : {0:N2} MB" -f $SizeInMB
+            "大小 : {0:N2} GB" -f $SizeInGB
+            "路径 : $NewFilePath"
+            "版本 : $Revision"
+            "SHA256: $FullHash"
+            "分卷参数: -v$VolumeSizeArg"
+            "分卷数: $N"
+            "最后一卷: ${Last} MB"
+            "差值: $Diff MB"
           ) | ForEach-Object { Write-Host "  $_" }
           Write-Host "========================================" -ForegroundColor Cyan
+
           $OutputZipFileName = "${RevisionName}-${Revision}.7z"
           $OutputZipPath = Join-Path -Path $DistDir -ChildPath $OutputZipFileName
-          $Args7z = @(
-              "a",
-              "-t7z",
-              "-v${VolumeSizeArg}",
-              "-mx=0",
-              ('"{0}"' -f $OutputZipPath),
-              ('"{0}"' -f $NewFilePath)
-          )
-          Write-Host "Executing 7z with arguments: $Args7z"
-          # 7z a -t7z -v$VolumeSizeArg -mx=0 "$OutputZipPath" "$NewFilePath"
-          $process = Start-Process -FilePath "7z" -ArgumentList $Args7z -Wait -NoNewWindow -PassThru
-          if ($process.ExitCode -ne 0) {
-              Write-Error "7z failed with exit code $($process.ExitCode)"
-              exit $process.ExitCode
-          }
-          Write-Host "Generated archive: $OutputZipPath" -ForegroundColor Green
-          Get-ChildItem -Recurse
+          Write-Host "VolumeSizeArg : 7z a -t7z -v$VolumeSizeArg -mx=0 $OutputZipPath $NewFilePath"
+
+          & 7z a -t7z -v"$VolumeSizeArg" -mx=0 "$OutputZipPath" "$NewFilePath"
+
+          Write-Host "Generated archive: $OutputZipPath"
+          Get-ChildItem -Recurse -Force | Where-Object { $_.FullName -notmatch '\\(Drivers|\.git)(\\|$)' }
           Write-Host "Split Archive Done..." -ForegroundColor Green
+
+          Get-ChildItem "dist_win11" | Sort-Object Name | ForEach-Object {
+            Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length / 1MB))
+          }
+
+          $vols = Get-ChildItem "dist_win10/*.7z.*"
+          $max = ($vols | Measure-Object Length -Maximum).Maximum / 1MB
+          $min = ($vols | Measure-Object Length -Minimum).Minimum / 1MB
+          Write-Host ("最大卷: {0:N2} MB" -f $max)
+          Write-Host ("最小卷: {0:N2} MB" -f $min)
+          Write-Host ("差值  : {0:N2} MB" -f ($max - $min))
 
       - name: Step-3 Delete Old Release
         if: ${{ always() }}
@@ -135,4 +163,5 @@ jobs:
           tag_name: ${{env.REVISION_NAME}}
           name: ${{ env.REVISION_NAME }}-${{ env.ISO_REVISION }}
           files: |
-            ./dist_win10/${{ env.REVISION_NAME }}-${{ env.ISO_REVISION }}.7z.*
+            ./dist_win10/*.7z.*
+            ./win10-22h2-amd64/build-win10-22h2-amd64.log
