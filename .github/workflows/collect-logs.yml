@@ -34,8 +34,7 @@ jobs:
           DL_ERR=""
           LAST_ERR=""
           for i in 1 2 3 4 5 6; do
-            if DL_ERR=$(gh api "/repos/$REPO/actions/runs/$RUN_ID/logs" 2>&1 > "$OUT") \
-              && [ -s "$OUT" ]; then
+            if DL_ERR=$(gh api "/repos/$REPO/actions/runs/$RUN_ID/logs" 2>&1 > "$OUT") && [ -s "$OUT" ]; then
               break
             fi
             LAST_ERR="$DL_ERR"
@@ -45,8 +44,7 @@ jobs:
           [ -s "$OUT" ] || { echo "::error::download failed: $LAST_ERR"; exit 1; }
           echo "asset=$OUT" >> "$GITHUB_OUTPUT"
 
-          gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 \
-            || gh release create "$TAG" --repo "$REPO" --title "$TAG" --notes "auto-created"
+          gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 || gh release create "$TAG" --repo "$REPO" --title "$TAG" --notes "auto-created"
 
           UP_ERR=""
           ok=0
@@ -70,11 +68,12 @@ jobs:
       - name: Delete past completed runs
         if: ${{ always() }}
         continue-on-error: true
+        shell: bash
         run: |
           gh run list --repo "$REPO" --workflow "${{ github.workflow }}" --limit 30 \
             --json databaseId,status \
-            --jq '.[] | select(.status=="completed") | .databaseId' \
-          | while read -r id; do
+            --jq '.[] | select(.status=="completed") | .databaseId' | while read -r id; do
+              [ -z "$id" ] && continue
               [ "$id" = "${{ github.run_id }}" ] && continue
               gh run delete "$id" --repo "$REPO" || true
             done
