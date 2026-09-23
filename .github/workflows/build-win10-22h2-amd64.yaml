@@ -20,6 +20,7 @@ jobs:
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $OutputEncoding = [System.Text.Encoding]::UTF8
+          $env:PSModulePath = "C:\Windows\system32\WindowsPowerShell\v1.0\Modules;$env:PSModulePath"
           & cmd /c .\uup_download_windows.cmd 2>&1 | Tee-Object -FilePath "./build-win10-22h2-amd64.log" -Encoding utf8
 
       - name: Step-2 Split Archive
