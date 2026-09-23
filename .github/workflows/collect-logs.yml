@@ -1,0 +1,119 @@
+name: collect-logs
+
+on:
+  workflow_run:
+    workflows:
+      - "build-win11-25h2-amd64"
+      - "build-win10-22h2-amd64"
+    types:
+      - completed
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Resolve tag from workflow name
+        id: meta
+        run: |
+          set -e
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          RUN_NAME="${{ github.event.workflow_run.name }}"
+
+          case "$RUN_NAME" in
+            "build-win10-22h2-amd64") TAG="win10-22h2-amd64" ;;
+            "build-win11-25h2-amd64") TAG="win11-25h2-amd64" ;;
+            *)
+              echo "::error::unknown workflow name: $RUN_NAME"
+              exit 1
+              ;;
+          esac
+
+          SAFE_NAME=$(echo "$RUN_NAME" | tr '/ ' '__')
+          echo "run_id=$RUN_ID"       >> "$GITHUB_OUTPUT"
+          echo "run_name=$SAFE_NAME"  >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
+          echo "resolved: tag=$TAG run=$RUN_NAME ($RUN_ID)"
+
+      - name: Download this run's log
+        id: download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          RUN_ID="${{ steps.meta.outputs.run_id }}"
+          OUT="log-${{ steps.meta.outputs.run_name }}-$RUN_ID.zip"
+
+          ok=0
+          for i in $(seq 1 6); do
+            if gh api "/repos/$REPO/actions/runs/$RUN_ID/logs" > "$OUT" 2>/dev/null && [ -s "$OUT" ]; then
+              echo "download ok, size=$(stat -c%s "$OUT") bytes"
+              ok=1
+              break
+            fi
+            echo "attempt $i: log not ready, wait 10s..."
+            rm -f "$OUT"
+            sleep 10
+          done
+
+          if [ "$ok" != "1" ]; then
+            echo "::error::failed to download logs for run $RUN_ID"
+            exit 1
+          fi
+
+          echo "asset=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="${{ steps.meta.outputs.tag }}"
+          REPO="${{ github.repository }}"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "release $TAG exists"
+          else
+            echo "release $TAG missing, creating"
+            gh release create "$TAG" --repo "$REPO" \
+              --title "$TAG" \
+              --notes "auto-created by collect-logs"
+          fi
+
+      - name: Upload log to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh release upload "${{ steps.meta.outputs.tag }}" \
+            "${{ steps.download.outputs.asset }}" \
+            --repo "${{ github.repository }}" --clobber
+
+      - name: Fallback upload as artifact
+        if: failure() && steps.download.outputs.asset != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-${{ steps.meta.outputs.run_name }}-${{ steps.meta.outputs.run_id }}
+          path: ${{ steps.download.outputs.asset }}
+          if-no-files-found: warn
+
+      - name: Delete past completed runs of this workflow
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run list \
+            --workflow "${{ github.workflow }}" \
+            --limit 100 \
+            --json databaseId,status \
+            --jq '.[] | select(.status == "completed") | .databaseId' \
+            | while IFS= read -r run_id; do
+                [ -z "$run_id" ] && continue
+                [ "$run_id" = "${{ github.run_id }}" ] && continue
+                gh run delete "$run_id" || true
+              done
