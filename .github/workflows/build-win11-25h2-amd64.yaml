@@ -21,6 +21,8 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $OutputEncoding = [System.Text.Encoding]::UTF8
           $env:PSModulePath = "C:\Windows\system32\WindowsPowerShell\v1.0\Modules;$env:PSModulePath"
+          Remove-Item -Path "../Drivers/ALL/w10" -Recurse -Force
+
           & cmd /c .\uup_download_windows.cmd 2>&1 | Tee-Object -FilePath "./build-win11-25h2-amd64.log" -Encoding utf8
 
       - name: Step-2 Split Archive
@@ -100,10 +102,10 @@ jobs:
           & 7z a -t7z -v"$VolumeSizeArg" -mx=0 -bso0 -bsp0 "$OutputZipPath" "$NewFilePath"
 
           Write-Host "Generated archive: $OutputZipPath"
-          Get-ChildItem -Recurse -Force | Where-Object { $_.FullName -notmatch '\\(Drivers|\.git)(\\|$)' }
+          Get-ChildItem -Recurse -Force | Where-Object { $_.FullName -notmatch '\\(Drivers|\.git|\.github)(\\|$)' }
           Write-Host "Split Archive Done..." -ForegroundColor Green
 
-          Get-ChildItem "dist_win11" | Sort-Object Name | ForEach-Object {
+          Get-ChildItem "dist_win11" -File -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object {
             Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length / 1MB))
           }
 
@@ -165,4 +167,4 @@ jobs:
           name: ${{ env.REVISION_NAME }}-${{ env.ISO_REVISION }}
           files: |
             ./dist_win11/*.7z.*
-            ./win11-25h2-amd64/build-win11-25h2-amd64.log
+            ./win11-25h2-amd64/*.log
