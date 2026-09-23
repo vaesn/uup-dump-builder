@@ -13,13 +13,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-        
+
       - name: Step-1 Build ISO from UUP dump package
         working-directory: ./win10-22h2-amd64
         shell: cmd
         run: |
           uup_download_windows.cmd
-          
+
       - name: Step-2 Split Archive
         working-directory: .
         shell: pwsh
@@ -38,7 +38,7 @@ jobs:
           $SizeInBytes = $IsoFile.Length
           $SizeInMB = $SizeInBytes / 1MB
           $SizeInGB = $SizeInBytes / 1GB
-          $VolumeSizeVal = [int][Math]::Ceiling($SizeInMB / 5) + 32
+          $VolumeSizeVal = [int][Math]::Ceiling($SizeInMB / 5) + 16
           $VolumeSizeArg = "${VolumeSizeVal}M"
           $EnvVars = @(
               "ISO_SIZEMB={0:N2} MB" -f $SizeInMB
@@ -84,7 +84,7 @@ jobs:
           Write-Host "Generated archive: $OutputZipPath" -ForegroundColor Green
           Get-ChildItem -Recurse
           Write-Host "Split Archive Done..." -ForegroundColor Green
-          
+
       - name: Step-3 Delete Old Release
         if: ${{ always() }}
         continue-on-error: true
@@ -92,7 +92,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: gh release delete ${{ env.REVISION_NAME }} --cleanup-tag -y || true
-        
+
       - name: Step-4 Delete past completed runs of this workflow
         if: ${{ always() }}
         continue-on-error: true
@@ -108,14 +108,14 @@ jobs:
                 [ "$run_id" = "${{ github.run_id }}" ] && continue
                 gh run delete "$run_id" || true
               done
-              
+
       - name: Step-5 Build New Release
         uses: softprops/action-gh-release@v3
         with:
           fail_on_unmatched_files: true
           overwrite_files: true
           body: |
-            ## Windows10 22H2 amd64 Feature Update ${{ env.ISO_REVISION }}
+            ## Windows 10 22H2 amd64 Feature Update ${{ env.ISO_REVISION }}
             - **ARTIFACT**: ${{ env.ISO_NAME }}
             - **Version**: ${{ env.ISO_REVISION }}_Pro
             - **SHA256**: ${{ env.SHA256 }}
