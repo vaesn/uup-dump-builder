@@ -7,7 +7,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
+        with:
+          sparse-checkout: |
+            /*
+            !/Drivers
+          sparse-checkout-cone-mode: false
+      
       # 造一个假 ISO，大小可调，用来触发分卷
       - name: Prepare fake ISO
         shell: pwsh
