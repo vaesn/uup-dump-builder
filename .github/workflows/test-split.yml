@@ -142,7 +142,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "7z 分卷失败，退出码 $LASTEXITCODE" }
 
           Write-Host "Generated archive: $OutputZipPath"
-          Get-ChildItem -Recurse
+          Get-ChildItem -Recurse -Force | Where-Object { $_.FullName -notmatch '\\(Drivers|\.git)(\\|$)' }
           Write-Host "Split Archive Done..." -ForegroundColor Green
 
       # 打印分卷结果，方便核对
