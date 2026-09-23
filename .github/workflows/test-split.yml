@@ -1,0 +1,162 @@
+name: test-split-archive
+on: workflow_dispatch
+
+jobs:
+  test-split:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # 造一个假 ISO，大小可调，用来触发分卷
+      - name: Prepare fake ISO
+        shell: pwsh
+        run: |
+          $SourceDir = "win11-25h2-amd64"
+          New-Item -Path $SourceDir -ItemType Directory -Force | Out-Null
+
+          # 目标大小：4.5 GB（可改成任意值测试）
+          $TargetMB = 7854
+          $FakeIso  = Join-Path $SourceDir "win11-25h2-amd64.iso"
+
+          # 用 fsutil 快速创建稀疏文件，瞬间完成，不占实际磁盘
+          if (Test-Path $FakeIso) { Remove-Item $FakeIso -Force }
+          fsutil file createnew $FakeIso ($TargetMB * 1MB) | Out-Null
+
+          Write-Host "假 ISO 已创建: $FakeIso"
+          Write-Host ("大小: {0:N2} MB" -f ((Get-Item $FakeIso).Length / 1MB))
+
+      # 只跑 Step-2
+      - name: Step-2 Split Archive
+        working-directory: .
+        shell: pwsh
+        run: |
+          # ===== 把你现在的 Step-2 代码整段粘贴到这里 =====
+          $ErrorActionPreference = "Stop"
+
+          $SourceDir    = "win11-25h2-amd64"
+          $DistDir      = "dist_win11"
+          $RevisionName = "win11-25h2-amd64"
+          $MaxVolMB     = 1792
+          $Reserve      = 16
+          $MaxDiffMB    = 128
+
+          New-Item -Path $DistDir -ItemType Directory -Force | Out-Null
+
+          $Iso = Get-ChildItem -Path $SourceDir -Filter "*.iso" -File | Select-Object -First 1
+          if (-not $Iso) { throw "在 $SourceDir 找不到 ISO" }
+
+          $BaseName  = $Iso.BaseName
+          $IsoLength = $Iso.Length
+          $IsoDir    = $Iso.DirectoryName
+          $IsoFull   = $Iso.FullName
+
+          $FullHash = (Get-FileHash -Path $IsoFull -Algorithm SHA256).Hash.ToLower()
+          $ShortHash = $FullHash.Substring($FullHash.Length - 8)
+          $NewFileName = "${BaseName}_${ShortHash}.iso"
+          $NewFilePath = Join-Path -Path $IsoDir -ChildPath $NewFileName
+          Rename-Item -Path $IsoFull -NewName $NewFileName -Force
+
+          $Revision    = $BaseName.Split('-')[0]
+          $SizeInBytes = $IsoLength
+          $SizeInMB    = $SizeInBytes / 1MB
+          $SizeInGB    = $SizeInBytes / 1GB
+
+          $TotalMB = [Math]::Ceiling($SizeInMB)
+          $N       = [Math]::Ceiling($TotalMB / ($MaxVolMB - $Reserve))
+          $S       = [Math]::Ceiling($TotalMB / $N) + $Reserve
+          $Last    = $TotalMB - $S * ($N - 1)
+          $Diff    = $S - $Last
+
+          if ($S    -gt $MaxVolMB)  { throw "每卷超限: $S MB" }
+          if ($Diff -gt $MaxDiffMB) { throw "差值超限: $Diff MB" }
+
+          $VolumeSizeArg = "${S}M"
+
+          # ===== 诊断打印：确认变量有值 =====
+          Write-Host "===== 诊断 ====="
+          Write-Host "SizeInMB      = [$SizeInMB]"
+          Write-Host "TotalMB       = [$TotalMB]"
+          Write-Host "N             = [$N]"
+          Write-Host "S             = [$S]"
+          Write-Host "Last          = [$Last]"
+          Write-Host "Diff          = [$Diff]"
+          Write-Host "VolumeSizeArg = [$VolumeSizeArg]"
+          Write-Host "================="
+
+          @(
+            "ISO_SIZEMB={0:N2} MB" -f $SizeInMB
+            "ISO_SIZEGB={0:N2} GB" -f $SizeInGB
+            "VOLUME_SIZE=$VolumeSizeArg"
+            "VOLUME_COUNT=$N"
+            "VOLUME_LAST=${Last}M"
+            "VOLUME_DIFF=$Diff"
+            "ISO_NAME=$NewFileName"
+            "ISO_PATH=$NewFilePath"
+            "ISO_REVISION=$Revision"
+            "REVISION_NAME=$RevisionName"
+            "SHA256=$FullHash"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "  ISO Processing Information" -ForegroundColor Cyan
+          Write-Host "========================================" -ForegroundColor Cyan
+          @(
+            "文件名: $NewFileName"
+            "大小 : {0:N2} MB" -f $SizeInMB
+            "大小 : {0:N2} GB" -f $SizeInGB
+            "路径 : $NewFilePath"
+            "版本 : $Revision"
+            "SHA256: $FullHash"
+            "分卷参数: -v$VolumeSizeArg"
+            "分卷数: $N"
+            "最后一卷: ${Last} MB"
+            "差值: $Diff MB"
+          ) | ForEach-Object { Write-Host "  $_" }
+          Write-Host "========================================" -ForegroundColor Cyan
+
+          Get-ChildItem -Path $DistDir -Filter "$RevisionName-$Revision.7z*" -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+
+          $OutputZipFileName = "${RevisionName}-${Revision}.7z"
+          $OutputZipPath     = Join-Path -Path $DistDir -ChildPath $OutputZipFileName
+
+          # ===== 关键：用数组 + splatting 调 7z =====
+          $7zArgs = @(
+            'a'
+            '-t7z'
+            "-v$VolumeSizeArg"
+            '-mx=0'
+            '-bso0'
+            '-bsp0'
+            $OutputZipPath
+            $NewFilePath
+          )
+          Write-Host "7z args: $($7zArgs -join ' | ')"
+
+          #& 7z @7zArgs
+          Write-Host "即将执行: 7z a -t7z -v$VolumeSizeArg -mx=0 -bso0 -bsp0 $OutputZipPath $NewFilePath"
+
+          & 7z a -t7z -v"$VolumeSizeArg" -mx=0 -bso0 -bsp0 "$OutputZipPath" "$NewFilePath"
+
+          if ($LASTEXITCODE -ne 0) { throw "7z 分卷失败，退出码 $LASTEXITCODE" }
+
+          Write-Host "Generated archive: $OutputZipPath"
+          Get-ChildItem -Recurse
+          Write-Host "Split Archive Done..." -ForegroundColor Green
+
+      # 打印分卷结果，方便核对
+      - name: Verify volumes
+        shell: pwsh
+        run: |
+          Write-Host "===== 分卷结果 ====="
+          Get-ChildItem "dist_win11" | Sort-Object Name | ForEach-Object {
+            Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length / 1MB))
+          }
+
+          $vols = Get-ChildItem "dist_win11/*.7z.*"
+          $max = ($vols | Measure-Object Length -Maximum).Maximum / 1MB
+          $min = ($vols | Measure-Object Length -Minimum).Minimum / 1MB
+          Write-Host ("最大卷: {0:N2} MB" -f $max)
+          Write-Host ("最小卷: {0:N2} MB" -f $min)
+          Write-Host ("差值  : {0:N2} MB" -f ($max - $min))
