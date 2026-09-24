@@ -188,11 +188,11 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           body: |
-            ## Windows 11 25H2 amd64 ${{ env.ISO_REVISION }}
+            ## Windows 11 24H2 amd64 ${{ env.ISO_REVISION }}
             - **ARTIFACT**: ${{ env.ISO_NAME }}
             - **Version**: ${{ env.ISO_REVISION }}_Pro
             - **SHA256**: ${{ env.SHA256 }}
-            - **Language**: zh_CN
+            - **Language**: ZH-CN
             - **File Size**: ${{ env.ISO_SIZEMB }} 、 ${{ env.ISO_SIZEGB }}
             - **Volume Size**: ${{ env.VOLUME_SIZE }}
             - **Volume Count**: ${{ env.PART_COUNT }}

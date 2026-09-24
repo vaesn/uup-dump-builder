@@ -32,7 +32,7 @@ jobs:
           $SourceDir    = "win10-22h2-amd64"
           $DistDir      = "dist_win10"
           $RevisionName = "win10-22h2-amd64"
-          $MaxVolMB     = 1792
+          $MaxVolMB     = 1895
           $Reserve      = 16
           $MaxDiffMB    = 128
 
