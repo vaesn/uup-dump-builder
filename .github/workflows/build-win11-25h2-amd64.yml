@@ -216,3 +216,30 @@ jobs:
           files: |
             ./dist_win11/*.7z.*
             ./win11-25h2-amd64/*.log
+
+      - name: Step-6 Update README
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $newTimeNOW = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss")
+          $fileName = $env:ISO_NAME
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for ($i = 0; $i -lt 5; $i++) {
+              git fetch origin main
+              git reset --hard origin/main
+              $readmeOriginal = Get-Content README.md -Raw -Encoding utf8
+              $replacement = "<!-- win11-25h2-amd64 -->`n$fileName ($newTimeNOW UTC)`n<!-- /win11-25h2-amd64 -->"
+              $readmeUpdated = [regex]::Replace(
+                  $readmeOriginal,
+                  '(?s)(<!-- win11-25h2-amd64 -->).*?(<!-- /win11-25h2-amd64 -->)',
+                  { $replacement }
+              )
+              if ($readmeUpdated -eq $readmeOriginal) { break }
+              [IO.File]::WriteAllText("$PWD/README.md", $readmeUpdated, [Text.UTF8Encoding]::new($false))
+              git add README.md
+              git commit -m "update"
+              git push
+              if ($LASTEXITCODE -eq 0) { break }
+          }
