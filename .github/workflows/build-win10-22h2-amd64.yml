@@ -109,6 +109,52 @@ jobs:
           Write-Host ("最小卷: {0:N2} MB" -f $min)
           Write-Host ("差值  : {0:N2} MB" -f ($max - $min))
 
+          $repo = $env:GITHUB_REPOSITORY
+          $tag  = $RevisionName
+          $baseUrl = "https://v4.gh-proxy.org/https://github.com/$repo/releases/download/$tag"
+          $parts = @(
+            Get-ChildItem -Path $DistDir -File |
+              Where-Object { $_.Name -match '\.7z\.\d+$' } |
+              Sort-Object { [int]($_.Name -replace '^.*\.7z\.', '') }
+          )
+          if ($parts.Count -eq 0) {
+            throw "No 7z volume files found in $DistDir"
+          }
+          $firstPart = $parts[0].Name
+          $lastPart  = $parts[-1].Name
+          $partCount = $parts.Count
+          $tableRows = ($parts | ForEach-Object {
+            $name = $_.Name
+            $urlName = [uri]::EscapeDataString($name)
+            $idx = [int]($name -replace '^.*\.7z\.', '')
+            $ext = [regex]::Match($name, '\.7z\.\d+$').Value
+            "| $idx | ``$name`` | [下载$ext]($baseUrl/$urlName) |"
+          }) -join "`n"
+          $downloadLinks = @(
+            "| 分卷 | 文件名 | 链接 |"
+            "| --- | --- | --- |"
+            $tableRows
+          ) -join "`n"
+          @(
+            "FIRST_PART=$firstPart"
+            "LAST_PART=$lastPart"
+            "PART_COUNT=$partCount"
+            "DOWNLOAD_BASE_URL=$baseUrl"
+            "DOWNLOAD_LINKS<<EOF"
+            $downloadLinks
+            "EOF"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "  Dynamic Download Links" -ForegroundColor Cyan
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "Base URL      : $baseUrl"
+          Write-Host "First Part    : $firstPart"
+          Write-Host "Last Part     : $lastPart"
+          Write-Host "Part Count    : $partCount"
+          Write-Host "Download Links:"
+          Write-Host $downloadLinks
+          Write-Host "========================================" -ForegroundColor Cyan
+
       - name: Step-3 Delete Old Release
         if: ${{ always() }}
         continue-on-error: true
@@ -125,12 +171,14 @@ jobs:
         shell: bash
         run: |
           gh run list \
-            --repo "${{ github.repository }}" --workflow "${{ github.workflow }}" --limit 30 \
+            --repo "${{ github.repository }}" \
+            --workflow "${{ github.workflow }}" \
+            --limit 100 \
             --json databaseId,status \
-            --jq '.[] | select(.status=="completed") | .databaseId' | while read -r id; do
-              [ -z "$id" ] && continue
-              [ "$id" = "${{ github.run_id }}" ] && continue
-              gh run delete "$id" --repo "${{ github.repository }}" || true
+            --jq '.[] | select(.status=="completed") | .databaseId' | while read -r run_id; do
+              if [ -z "$run_id" ]; then continue; fi
+              if [ "$run_id" = "${{ github.run_id }}" ]; then continue; fi
+              gh run delete "$run_id" --repo "${{ github.repository }}" || true
             done
 
       - name: Step-5 Build New Release
@@ -146,13 +194,19 @@ jobs:
             - **Language**: zh_CN
             - **File Size**: ${{ env.ISO_SIZEMB }} ， ${{ env.ISO_SIZEGB }}
             - **Volume Size**: ${{ env.VOLUME_SIZE }}
+            - **Volume Count**: ${{ env.PART_COUNT }}
             ---
             ### 📦 下载说明
-            使用 7-Zip 进行分卷压缩（每卷 ${{ env.VOLUME_SIZE }}）。
+            使用 7-Zip 进行分卷压缩，每卷 ${{ env.VOLUME_SIZE }}，共 ${{ env.PART_COUNT }} 卷。
+
+            **分卷下载链接**：
+
+            ${{ env.DOWNLOAD_LINKS }}
+
             **下载方式**:
-            1. 下载所有 `.7z.001`, `.7z.002`, ... 等后缀的文件。
+            1. 下载以上所有 `.7z.001`, `.7z.002`,`.7z.003` ... 等后缀的文件。
             2. 确保所有文件位于同一文件夹。
-            3. 使用 7-Zip 解压 `.7z.001` 即可获得完整的 ISO 文件。
+            3. 使用 7-Zip 解压 `${{ env.FIRST_PART }}` 即可获得完整的 ISO 文件。
             4. 使用 `https://gh-proxy.com/` 加速下载
             ---
             > ⚠️ **Note**: This is a multi-volume archive (.7z.001, .7z.002...). Please download all parts before extracting.

@@ -70,10 +70,13 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          gh run list --repo "$REPO" --workflow "${{ github.workflow }}" --limit 30 \
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow "${{ github.workflow }}" \
+            --limit 100 \
             --json databaseId,status \
-            --jq '.[] | select(.status=="completed") | .databaseId' | while read -r id; do
-              [ -z "$id" ] && continue
-              [ "$id" = "${{ github.run_id }}" ] && continue
-              gh run delete "$id" --repo "$REPO" || true
+            --jq '.[] | select(.status=="completed") | .databaseId' | while read -r run_id; do
+              if [ -z "$run_id" ]; then continue; fi
+              if [ "$run_id" = "${{ github.run_id }}" ]; then continue; fi
+              gh run delete "$run_id" --repo "${{ github.repository }}" || true
             done
