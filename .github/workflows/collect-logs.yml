@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - "build-win11-25h2-amd64"
+      - "build-win11-24h2-amd64"
       - "build-win10-22h2-amd64"
     types: [completed]
 
@@ -26,6 +27,7 @@ jobs:
           case "${{ github.event.workflow_run.name }}" in
             "build-win10-22h2-amd64") TAG="win10-22h2-amd64" ;;
             "build-win11-25h2-amd64") TAG="win11-25h2-amd64" ;;
+            "build-win11-24h2-amd64") TAG="win11-24h2-amd64" ;;
             *) echo "::error::unknown workflow"; exit 1 ;;
           esac
 
