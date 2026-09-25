@@ -1,4 +1,4 @@
-name: build-win11-25h2-amd64
+name: build-win11-24h2-x64
 on: workflow_dispatch
 permissions:
   contents: write
@@ -7,7 +7,7 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 jobs:
-  build-win11-25h2-amd64:
+  build-win11-24h2-x64:
     runs-on: windows-latest
     timeout-minutes: 300
     steps:
@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Step-1 Build ISO from UUP dump package
-        working-directory: ./win11-25h2-amd64
+        working-directory: ./win11-24h2-x64
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -23,15 +23,15 @@ jobs:
           $env:PSModulePath = "C:\Windows\system32\WindowsPowerShell\v1.0\Modules;$env:PSModulePath"
           Remove-Item -Path "../Drivers/ALL/w10" -Recurse -Force
 
-          & cmd /c .\uup_download_windows.cmd 2>&1 | Tee-Object -FilePath "./build-win11-25h2-amd64.log" -Encoding utf8
+          & cmd /c .\uup_download_windows.cmd 2>&1 | Tee-Object -FilePath "./build-win11-25h2-x64.log" -Encoding utf8
 
       - name: Step-2 Split Archive
         working-directory: .
         shell: pwsh
         run: |
-          $SourceDir    = "win11-25h2-amd64"
+          $SourceDir    = "win11-24h2-x64"
           $DistDir      = "dist_win11"
-          $RevisionName = "win11-25h2-amd64"
+          $RevisionName = "win11-24h2-x64"
           $MaxVolMB     = 1895
           $Reserve      = 16
           $MaxDiffMB    = 128
@@ -188,11 +188,11 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           body: |
-            ## Windows 11 25H2 amd64 ${{ env.ISO_REVISION }}
+            ## Windows 11 24H2 x64 ${{ env.ISO_REVISION }}
             - **ARTIFACT**: ${{ env.ISO_NAME }}
             - **Version**: ${{ env.ISO_REVISION }}_Pro
             - **SHA256**: ${{ env.SHA256 }}
-            - **Language**: zh_CN
+            - **Language**: ZH-CN
             - **File Size**: ${{ env.ISO_SIZEMB }} 、 ${{ env.ISO_SIZEGB }}
             - **Volume Size**: ${{ env.VOLUME_SIZE }}
             - **Volume Count**: ${{ env.PART_COUNT }}
@@ -215,7 +215,7 @@ jobs:
           name: ${{ env.REVISION_NAME }}-${{ env.ISO_REVISION }}
           files: |
             ./dist_win11/*.7z.*
-            ./win11-25h2-amd64/*.log
+            ./win11-24h2-x64/*.log
 
       - name: Step-6 Update README
         env:
@@ -230,10 +230,10 @@ jobs:
               git fetch origin main
               git reset --hard origin/main
               $readmeOriginal = Get-Content README.md -Raw -Encoding utf8
-              $replacement = "<!-- win11-25h2-amd64 -->`n$fileName ($newTimeNOW UTC)`n<!-- /win11-25h2-amd64 -->"
+              $replacement = "<!-- win11-24h2-x64 -->`n$fileName ($newTimeNOW UTC)`n<!-- /win11-24h2-x64 -->"
               $readmeUpdated = [regex]::Replace(
                   $readmeOriginal,
-                  '(?s)(<!-- win11-25h2-amd64 -->).*?(<!-- /win11-25h2-amd64 -->)',
+                  '(?s)(<!-- win11-24h2-x64 -->).*?(<!-- /win11-24h2-x64 -->)',
                   { $replacement }
               )
               if ($readmeUpdated -eq $readmeOriginal) { break }

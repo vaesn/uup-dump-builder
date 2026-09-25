@@ -8,25 +8,25 @@ Use UUP dump to automatically build the latest version of Windows 10/11.
 
 <br />
 
-- **_Windows 10 22H2 amd64_**
+- **_Windows 10 22H2 x64_**
 
-<!-- win10-22h2-amd64 -->
+<!-- win10-22h2-x64 -->
 null
-<!-- /win10-22h2-amd64 -->
+<!-- /win10-22h2-x64 -->
 <br />
 
-- **_Windows 11 24H2 amd64_**
+- **_Windows 11 24H2 x64_**
 
-<!-- win11-24h2-amd64 -->
+<!-- win11-24h2-x64 -->
 null
-<!-- /win11-24h2-amd64 -->
+<!-- /win11-24h2-x64 -->
 <br />
 
-- **_Windows 11 25H2 amd64_**
+- **_Windows 11 25H2 x64_**
 
-<!-- win11-25h2-amd64 -->
+<!-- win11-25h2-x64 -->
 null
-<!-- /win11-25h2-amd64 -->
+<!-- /win11-25h2-x64 -->
 
 <br />
 
