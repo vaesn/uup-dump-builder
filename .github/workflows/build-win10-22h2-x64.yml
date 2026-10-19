@@ -33,8 +33,8 @@ jobs:
           $DistDir      = "dist_win10"
           $RevisionName = "win10-22h2-x64"
           $MaxVolMB     = 1895
-          $Reserve      = 16
-          $MaxDiffMB    = 128
+          $Reserve      = 8
+          $MaxDiffMB    = 64
 
           New-Item -Path $DistDir -ItemType Directory -Force | Out-Null
           $Iso = Get-ChildItem -Path $SourceDir -Filter "*.iso" -File | Select-Object -First 1
@@ -229,7 +229,10 @@ jobs:
               git fetch origin main
               git reset --hard origin/main
               $readmeOriginal = Get-Content README.md -Raw -Encoding utf8
-              $replacement = "<!-- win10-22h2-x64 -->`n$fileName ($newTimeNOW UTC)`n<!-- /win10-22h2-x64 -->"
+              $repo = $env:GITHUB_REPOSITORY
+              $RELEASE_URL = "https://github.com/$repo/releases/tag/${{ env.REVISION_NAME }}"
+              $link  = '[{0}]({1})' -f $fileName, $RELEASE_URL
+              $replacement = "<!-- win10-22h2-x64 -->`n$link`n`n($newTimeNOW UTC)`n<!-- /win10-22h2-x64 -->"
               $readmeUpdated = [regex]::Replace(
                   $readmeOriginal,
                   '(?s)(<!-- win10-22h2-x64 -->).*?(<!-- /win10-22h2-x64 -->)',
