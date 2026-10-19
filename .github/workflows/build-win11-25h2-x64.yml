@@ -21,7 +21,7 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $OutputEncoding = [System.Text.Encoding]::UTF8
           $env:PSModulePath = "C:\Windows\system32\WindowsPowerShell\v1.0\Modules;$env:PSModulePath"
-          Remove-Item -Path "../Drivers/ALL/w10" -Recurse -Force
+          # Remove-Item -Path "../Drivers/ALL/w10" -Recurse -Force
 
           & cmd /c .\uup_download_windows.cmd 2>&1 | Tee-Object -FilePath "./build-win11-25h2-x64.log" -Encoding utf8
 
@@ -157,7 +157,7 @@ jobs:
           Write-Host "========================================" -ForegroundColor Cyan
 
       - name: Step-3 Delete Old Release
-        if: ${{ always() }}
+        if: ${{ success() }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -165,7 +165,7 @@ jobs:
         run: gh release delete "${{ env.REVISION_NAME }}" --cleanup-tag -y || true
 
       - name: Step-4 Delete past completed runs of this workflow
-        if: ${{ always() }}
+        if: ${{ success() }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
